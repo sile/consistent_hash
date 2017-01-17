@@ -110,7 +110,15 @@ impl<'a, K: 'a, V: 'a, H: 'a + RingHasher> StaticHashRing<'a, K, V, H>
         this.build_ring();
         this
     }
-    pub fn calc_candidate<T: Hash>(&self, item: T) -> Candidates<K, V> {
+
+    // TODO
+    pub fn iter(&self) -> std::slice::Iter<Node<K, V>> {
+        self.nodes.iter()
+    }
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+    pub fn calc_candidates<T: Hash>(&self, item: T) -> Candidates<K, V> {
         let item_hash = self.hasher.hash(&item);
         let start =
             self.ring.binary_search_by_key(&(item_hash, 0), |vn| (vn.hash, 1)).err().unwrap();
@@ -150,8 +158,8 @@ mod tests {
         nodes.push(Node::new("bar", (), 10));
         nodes.push(Node::new("baz", (), 10));
         let ring = StaticHashRing::new(DefaultRingHasher::new(), nodes.into_iter());
-        println!("{:?}", ring.calc_candidate("aaa").collect::<Vec<_>>());
-        println!("{:?}", ring.calc_candidate("bbb").collect::<Vec<_>>());
+        println!("{:?}", ring.calc_candidates("aaa").collect::<Vec<_>>());
+        println!("{:?}", ring.calc_candidates("bbb").collect::<Vec<_>>());
         assert!(false);
     }
 }

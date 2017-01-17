@@ -92,7 +92,7 @@ impl<'a, K: 'a, V: 'a> Iterator for Candidates<'a, K, V>
 pub struct StaticHashRing<'a, K: 'a, V: 'a, H> {
     hasher: H,
     nodes: Vec<Node<K, V>>,
-    ring: Vec<VirtualNode<'a, K, V>>,
+    ring: Vec<VirtualNode<'a, K, V>>, // psize: u64,
 }
 impl<'a, K: 'a, V: 'a, H: 'a + RingHasher> StaticHashRing<'a, K, V, H>
     where K: Hash + Ord + Eq
@@ -105,9 +105,10 @@ impl<'a, K: 'a, V: 'a, H: 'a + RingHasher> StaticHashRing<'a, K, V, H>
         let mut this = StaticHashRing {
             hasher: hasher,
             nodes: nodes,
-            ring: Vec::new(),
+            ring: Vec::new(), // psize: 0,
         };
         this.build_ring();
+        // this.psize = std::u64::MAX / this.ring.len() as u64;
         this
     }
 
@@ -120,9 +121,58 @@ impl<'a, K: 'a, V: 'a, H: 'a + RingHasher> StaticHashRing<'a, K, V, H>
     }
     pub fn calc_candidates<T: Hash>(&self, item: T) -> Candidates<K, V> {
         let item_hash = self.hasher.hash(&item);
-        let start =
-            self.ring.binary_search_by_key(&(item_hash, 0), |vn| (vn.hash, 1)).err().unwrap();
+        let start = self.find_start(item_hash);
         Candidates::new(start, self.nodes.len(), &self.ring)
+    }
+
+    fn find_start(&self, item_hash: u64) -> usize {
+        self.ring.binary_search_by_key(&(item_hash, 0), |vn| (vn.hash, 1)).err().unwrap()
+        // use std::cmp;
+
+        // let ring = &self.ring[..];
+        // let partition_size = self.psize;
+
+        // let mut start = 0;
+        // let mut end = ring.len();
+        // let mut curr = (item_hash / partition_size) as usize; // TODO: min
+        // // panic!("# {}/{} ({})", curr, ring.len(), partition_size);
+
+        // // let mut count = 0;
+        // while start != end {
+        //     // count +=1;
+
+        //     // assert!(start < end);
+        //     // assert!(start <= curr);
+        //     // assert!(curr <= end,
+        //     //         "start={}, curr={}, end={} ({})",
+        //     //         start,
+        //     //         curr,
+        //     //         end,
+        //     //         is_less);
+        //     // curr = cmp::min(cmp::max(start, curr), end - 1);
+        //     let node_hash = unsafe { ring.get_unchecked(curr).hash };
+        //     if item_hash < node_hash {
+        //         let delta = node_hash - item_hash;
+        //         let next = curr - ((delta / partition_size) as usize + 1);
+        //         // let next = curr - cmp::min(curr, (delta / partition_size) as usize + 1);
+        //         end = curr;
+        //         curr = cmp::max(start, next);
+        //     } else {
+        //         // assert_ne!(item_hash, node_hash); //XXX
+        //         let delta = item_hash - node_hash;
+        //         let next = curr + ((delta / partition_size) as usize + 1);
+        //         start = curr + 1;
+        //         curr = cmp::min(next, end - 1);
+        //     }
+        // }
+        // // let mut count2 = 0;
+        // // self.ring.binary_search_by_key(&(item_hash, 0), |vn| {
+        // //     count2 +=1;
+        // //     (vn.hash, 1)
+        // // }).err().unwrap();
+        // // panic!("# C: {:?}", (count, count2));
+
+        // start
     }
 
     fn build_ring(&mut self) {

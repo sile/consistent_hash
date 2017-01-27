@@ -279,6 +279,7 @@ struct CandidateVnodes<'a, K: 'a, V: 'a> {
     start: usize,
     nodes: usize,
     ring: &'a [VirtualNode<'a, K, V>],
+    count: usize,
     seens: SplaySet<usize>,
 }
 impl<'a, K: 'a, V: 'a> CandidateVnodes<'a, K, V> {
@@ -287,6 +288,7 @@ impl<'a, K: 'a, V: 'a> CandidateVnodes<'a, K, V> {
             start: start,
             nodes: nodes,
             ring: ring,
+            count: 0,
             seens: Default::default(),
         }
     }
@@ -294,11 +296,12 @@ impl<'a, K: 'a, V: 'a> CandidateVnodes<'a, K, V> {
 impl<'a, K: 'a, V: 'a> Iterator for CandidateVnodes<'a, K, V> {
     type Item = usize;
     fn next(&mut self) -> Option<Self::Item> {
-        while self.seens.len() < self.nodes {
+        while self.seens.len() < self.nodes && self.count < self.ring.len() {
             let index = self.start;
             if let Some(vn) = self.ring.get(index) {
                 let key_addr: usize = unsafe { std::mem::transmute(&vn.node.key) };
                 self.start += 1;
+                self.count += 1;
                 if self.seens.contains(&key_addr) {
                     continue;
                 }

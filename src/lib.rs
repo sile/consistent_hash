@@ -235,7 +235,7 @@ impl<'a, K: 'a, V: 'a, H> StaticHashRing<'a, K, V, H>
         let start =
             self.ring.binary_search_by_key(&(item_hash, 0), |vn| (vn.hash, 1)).err().unwrap();
         let vnode_index = CandidateVnodes::new(start, self.nodes.len(), &self.ring)
-            .position(|i| f(&self.ring[i].node));
+            .find(|&i| f(&self.ring[i].node));
         if let Some(index) = vnode_index {
             Some(self.ring.remove(index).node)
         } else {
@@ -332,5 +332,24 @@ mod tests {
                    [&"bar", &"foo", &"baz"]);
         assert_eq!(ring.calc_candidates(&"bb").map(|n| &n.key).collect::<Vec<_>>(),
                    [&"foo", &"bar", &"baz"]);
+    }
+
+    #[test]
+    fn take_works() {
+        let mut nodes = Vec::new();
+        nodes.push(Node::new("foo").quantity(5));
+        nodes.push(Node::new("bar").quantity(5));
+        nodes.push(Node::new("baz").quantity(1));
+
+        let mut ring = StaticHashRing::new(DefaultHash, nodes.into_iter());
+        assert_eq!(ring.take(&"aa").map(|n| n.key).unwrap(), "bar");
+        assert_eq!(ring.take(&"aa").map(|n| n.key).unwrap(), "foo");
+        assert_eq!(ring.take(&"aa").map(|n| n.key).unwrap(), "bar");
+        assert_eq!(ring.take(&"aa").map(|n| n.key).unwrap(), "bar");
+        assert_eq!(ring.take(&"aa").map(|n| n.key).unwrap(), "foo");
+        assert_eq!(ring.take(&"aa").map(|n| n.key).unwrap(), "foo");
+        assert_eq!(ring.take(&"aa").map(|n| n.key).unwrap(), "foo");
+        assert_eq!(ring.take(&"aa").map(|n| n.key).unwrap(), "bar");
+        assert_eq!(ring.take(&"aa").map(|n| n.key).unwrap(), "baz");
     }
 }

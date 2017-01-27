@@ -219,6 +219,29 @@ impl<'a, K: 'a, V: 'a, H> StaticHashRing<'a, K, V, H>
             self.ring.binary_search_by_key(&(item_hash, 0), |vn| (vn.hash, 1)).err().unwrap();
         Candidates::new(start, self.nodes.len(), &self.ring)
     }
+
+    /// Removes the virtual node which associated to `item` and returns the reference to the node.
+    pub fn take<T: Hash>(&mut self, item: &T) -> Option<&Node<K, V>> {
+        self.take_if(item, |_| true)
+    }
+
+    /// Removes the virtual node which has the highest priority for `item`
+    /// among satisfying the predicate `f`,
+    /// and returns the reference to the node.
+    pub fn take_if<T: Hash, F>(&mut self, item: &T, f: F) -> Option<&Node<K, V>>
+        where F: Fn(&Node<K, V>) -> bool
+    {
+        let item_hash = self.hash.hash_item(item);
+        let start =
+            self.ring.binary_search_by_key(&(item_hash, 0), |vn| (vn.hash, 1)).err().unwrap();
+        let vnode_index = CandidateVnodes::new(start, self.nodes.len(), &self.ring)
+            .position(|i| f(&self.ring[i].node));
+        if let Some(index) = vnode_index {
+            Some(self.ring.remove(index).node)
+        } else {
+            None
+        }
+    }
 }
 impl<'a, K: 'a, V: 'a, H> StaticHashRing<'a, K, V, H> {
     /// Returns the count of the virtual nodes in this ring.
@@ -239,15 +262,28 @@ impl<'a, K: 'a, V: 'a, H> StaticHashRing<'a, K, V, H> {
 /// The higher priority node is placed in front of this sequence.
 ///
 /// This is created by calling `StaticHashRing::calc_candidates` method.
-pub struct Candidates<'a, K: 'a, V: 'a> {
+pub struct Candidates<'a, K: 'a, V: 'a>(CandidateVnodes<'a, K, V>);
+impl<'a, K: 'a, V: 'a> Candidates<'a, K, V> {
+    fn new(start: usize, nodes: usize, ring: &'a [VirtualNode<'a, K, V>]) -> Self {
+        Candidates(CandidateVnodes::new(start, nodes, ring))
+    }
+}
+impl<'a, K: 'a, V: 'a> Iterator for Candidates<'a, K, V> {
+    type Item = &'a Node<K, V>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(|i| self.0.ring[i].node)
+    }
+}
+
+struct CandidateVnodes<'a, K: 'a, V: 'a> {
     start: usize,
     nodes: usize,
     ring: &'a [VirtualNode<'a, K, V>],
     seens: SplaySet<usize>,
 }
-impl<'a, K: 'a, V: 'a> Candidates<'a, K, V> {
+impl<'a, K: 'a, V: 'a> CandidateVnodes<'a, K, V> {
     fn new(start: usize, nodes: usize, ring: &'a [VirtualNode<'a, K, V>]) -> Self {
-        Candidates {
+        CandidateVnodes {
             start: start,
             nodes: nodes,
             ring: ring,
@@ -255,18 +291,19 @@ impl<'a, K: 'a, V: 'a> Candidates<'a, K, V> {
         }
     }
 }
-impl<'a, K: 'a, V: 'a> Iterator for Candidates<'a, K, V> {
-    type Item = &'a Node<K, V>;
+impl<'a, K: 'a, V: 'a> Iterator for CandidateVnodes<'a, K, V> {
+    type Item = usize;
     fn next(&mut self) -> Option<Self::Item> {
         while self.seens.len() < self.nodes {
-            if let Some(vn) = self.ring.get(self.start) {
+            let index = self.start;
+            if let Some(vn) = self.ring.get(index) {
                 let key_addr: usize = unsafe { std::mem::transmute(&vn.node.key) };
                 self.start += 1;
                 if self.seens.contains(&key_addr) {
                     continue;
                 }
                 self.seens.insert(key_addr);
-                return Some(&vn.node);
+                return Some(index);
             } else {
                 self.start = 0;
             }
